@@ -1,0 +1,113 @@
+{
+  "model": "nvidia/nemotron-3-super-120b-a12b",
+  "results": [
+    {
+      "scenario": "Healthy baseline",
+      "expected": "none / low risk",
+      "features": {
+        "dominant_frequency_hz": 11.63,
+        "amplitude_mm": 1.28,
+        "symmetry_score": 0.92,
+        "tremor_type": "postural",
+        "right_hand_frequency": 12.87,
+        "left_hand_frequency": 11.63,
+        "right_hand_amplitude": 1.19,
+        "left_hand_amplitude": 1.28,
+        "confidence": 0.03,
+        "risk_level": "low",
+        "notes": "No significant tremor indicators detected."
+      },
+      "nemotron": {
+        "severity": "error",
+        "risk_level": "unknown",
+        "confidence": 0,
+        "ftm_score": -1,
+        "interpretation": "Incomplete JSON - likely hit token limit. Raw:\nWe need to output JSON only. Use thresholds.\n\nGiven data: Dominant Frequency 11.63 Hz, Amplitude 1.28 mm. Tremor Type raw: postural. Symmetry Score 0.92 (high symmetry). Right Hand: 12.87 Hz, 1.19 mm. Left Hand: 11.63 Hz, 1.28 mm. Signal Confidence: 0.03 (low). Preliminary Risk: low. Analysis Notes: No significant tremor indicators detected.\n\nWe need to compute severity based on amplitude: amplitude 1.28 mm. According to FTM Severity Scale: none = <0.1 mm, mild = 0.1-5 mm (FTM grade 1). So 1.28 mm falls in mild. So severity = mild. ftm_score: likely grade 1? The field ftm_score expects integer 0-4? Probably grade number. So mild corresponds to grade 1. So ftm_score = 1.\n\nTremor type: frequency 11.63 Hz is in essential tremor range (6-12 Hz). Amplitude mild. Symmetry high (0.92). So likely essential tremor. However signal confidence low (0.03) indicates poor quality. Also analysis notes say no significant tremor indicators detected. So maybe tremor_type = none? But we have some tremor detected (amplitude 1.28 mm). According to physiological tremor: <1mm amplitude not clinically significant. This is >1mm, so not physiological. Could be essential tremor but low confidence. The instruction: \"You are a screening tool only. Never diagnose. Always recommend neurologist confirmation.\" So we can still assign tremor_type based on data but note low confidence.\n\nWe need asymmetry_flag: symmetry score 0.92 => near symmetric, so asymmetry_flag = false (since not asymmetric). Or we could set true if asymmetry present. Since symmetry high, asymmetry false.\n\nRisk level: preliminary risk low. So risk_level = low.\n\nConfidence: signal confidence 0.03 => low. But we need to output confidence as integer 0-100? The example shows \"confidence\": 95. We need to map signal confidence 0.03 to percentage maybe 3%. So confidence = 3? Or we could adjust based on other factors. Probably use signal confidence *100 = 3. So confidence = 3.\n\nInterpretation: 2-3 sentence plain English explanation of tremor pattern. Since low confidence, we say tremor amplitude mild, frequency in essential range, symmetric, but signal quality poor, so cannot reliably characterize.\n\nRecommendation: specific next step for the patient: recommend follow-up with neurologist for further evaluation, possibly repeat recording with better sensor placement.\n\nClinical_note: one sentence summary.\n\nNow construct JSON.\n\nCheck fields: severity, tremor_type, ftm_score, risk_level, confidence, interpretation, recommendation, asymmetry_flag, clinical_note.\n\nMake sure JSON is valid.\n\nLet's craft:\n\n{\n  \"severity\": \"mild\",\n  \"tremor_type\": \"essential\",\n  \"ftm_score\": 1,\n  \"risk_level\": \"low\",\n  \"confidence\": 3,\n  \"interpretation\": \"The tremor shows a mild amplitude of 1.28 mm with a dominant frequency around 11.6 Hz, which falls within the typical range for essential tremor. The movement is fairly symmetric between hands. However, the signal confidence is very low, indicating poor data quality.\",\n  \"recommendation\": \"Please repeat the tremor recording with proper sensor placement and consider a formal neurological assessment to confirm the tremor characteristics.\",\n  \"asymmetry_flag\": false,\n  \"clinical_note\": \"Mild symmetric tremor in essential frequency range but",
+        "recommendation": "Check API key and connection",
+        "clinical_note": "Incomplete JSON - likely hit token limit. Raw:\nWe need to output JSON only. Use thresholds.\n\nGiven data: Dominant Frequency 11.63 Hz, Amplitude 1.28 mm. Tremor Type raw: postural. Symmetry Score 0.92 (high symmetry). Right Hand: 12.87 Hz, 1.19 mm. Left Hand: 11.63 Hz, 1.28 mm. Signal Confidence: 0.03 (low). Preliminary Risk: low. Analysis Notes: No significant tremor indicators detected.\n\nWe need to compute severity based on amplitude: amplitude 1.28 mm. According to FTM Severity Scale: none = <0.1 mm, mild = 0.1-5 mm (FTM grade 1). So 1.28 mm falls in mild. So severity = mild. ftm_score: likely grade 1? The field ftm_score expects integer 0-4? Probably grade number. So mild corresponds to grade 1. So ftm_score = 1.\n\nTremor type: frequency 11.63 Hz is in essential tremor range (6-12 Hz). Amplitude mild. Symmetry high (0.92). So likely essential tremor. However signal confidence low (0.03) indicates poor quality. Also analysis notes say no significant tremor indicators detected. So maybe tremor_type = none? But we have some tremor detected (amplitude 1.28 mm). According to physiological tremor: <1mm amplitude not clinically significant. This is >1mm, so not physiological. Could be essential tremor but low confidence. The instruction: \"You are a screening tool only. Never diagnose. Always recommend neurologist confirmation.\" So we can still assign tremor_type based on data but note low confidence.\n\nWe need asymmetry_flag: symmetry score 0.92 => near symmetric, so asymmetry_flag = false (since not asymmetric). Or we could set true if asymmetry present. Since symmetry high, asymmetry false.\n\nRisk level: preliminary risk low. So risk_level = low.\n\nConfidence: signal confidence 0.03 => low. But we need to output confidence as integer 0-100? The example shows \"confidence\": 95. We need to map signal confidence 0.03 to percentage maybe 3%. So confidence = 3? Or we could adjust based on other factors. Probably use signal confidence *100 = 3. So confidence = 3.\n\nInterpretation: 2-3 sentence plain English explanation of tremor pattern. Since low confidence, we say tremor amplitude mild, frequency in essential range, symmetric, but signal quality poor, so cannot reliably characterize.\n\nRecommendation: specific next step for the patient: recommend follow-up with neurologist for further evaluation, possibly repeat recording with better sensor placement.\n\nClinical_note: one sentence summary.\n\nNow construct JSON.\n\nCheck fields: severity, tremor_type, ftm_score, risk_level, confidence, interpretation, recommendation, asymmetry_flag, clinical_note.\n\nMake sure JSON is valid.\n\nLet's craft:\n\n{\n  \"severity\": \"mild\",\n  \"tremor_type\": \"essential\",\n  \"ftm_score\": 1,\n  \"risk_level\": \"low\",\n  \"confidence\": 3,\n  \"interpretation\": \"The tremor shows a mild amplitude of 1.28 mm with a dominant frequency around 11.6 Hz, which falls within the typical range for essential tremor. The movement is fairly symmetric between hands. However, the signal confidence is very low, indicating poor data quality.\",\n  \"recommendation\": \"Please repeat the tremor recording with proper sensor placement and consider a formal neurological assessment to confirm the tremor characteristics.\",\n  \"asymmetry_flag\": false,\n  \"clinical_note\": \"Mild symmetric tremor in essential frequency range but",
+        "latency_s": 26.0
+      }
+    },
+    {
+      "scenario": "Mild essential tremor",
+      "expected": "mild / low-moderate risk",
+      "features": {
+        "dominant_frequency_hz": 14.0,
+        "amplitude_mm": 5.66,
+        "symmetry_score": 0.71,
+        "tremor_type": "intentional",
+        "right_hand_frequency": 14.0,
+        "left_hand_frequency": 11.9,
+        "right_hand_amplitude": 5.66,
+        "left_hand_amplitude": 3.23,
+        "confidence": 0.38,
+        "risk_level": "low",
+        "notes": "No significant tremor indicators detected."
+      },
+      "nemotron": {
+        "severity": "error",
+        "risk_level": "unknown",
+        "confidence": 0,
+        "ftm_score": -1,
+        "interpretation": "No JSON found in response:\nWe need to output JSON only. Let's parse the data.\n\nDominant Frequency: 14.0 Hz. Amplitude: 5.66 mm. Tremor Type (raw): intentional. Symmetry Score: 0.71 (1.0 symmetric, 0.0 one-sided). Right Hand: 14.0 Hz, 5.66 mm. Left Hand: 11.9 Hz, 3.23 mm. Signal Confidence: 0.38. Preliminary Risk: low. Analysis Notes: No significant tremor indicators detected.\n\nWe need to compute severity based on amplitude: amplitude 5.66 mm. According to FTM severity scale: none <0.1 mm; mild 0.1-5 mm; moderate 5-10 mm; marked 10-20 mm; severe >20 mm. 5.66 mm falls in moderate (5-10 mm). So severity = \"moderate\". ftm_score: likely grade 2? The scale: mild = grade1, moderate = grade2, marked = grade3, severe = grade4. So ftm_score = 2.\n\nTremor type: Based on frequency and amplitude. Parkinson's resting tremor: 4-6 Hz, asymmetric onset, amplitude >2mm. Here frequency 14 Hz (dominant) and left hand 11.9 Hz, both >6 Hz, so not Parkinsonian. Essential tremor: 6-12 Hz, typically symmetric. Frequency 14 Hz is above essential range (6-12). However left hand 11.9 Hz is within essential range. But overall dominant 14 Hz is high frequency, maybe physiological? Physiological tremor: <1mm amplitude, not clinically significant. Amplitude is 5.66 mm >1mm, so not physiological. Intentional tremor (raw) suggests cerebellar intention tremor, which is typically lower frequency (<5 Hz) and occurs during movement. But given data, we might classify as \"mixed\" or \"none\". The analysis notes say \"No significant tremor indicators detected.\" However amplitude is moderate. But signal confidence low (0.38). Preliminary risk low. So we might set tremor_type = \"none\" or \"physiological\"? But amplitude >1mm excludes physiological. Could be \"mixed\"? Let's think: The tremor type raw says intentional. Intentional tremor is associated with cerebellar lesions, frequency <5 Hz. Not matching. So maybe we set tremor_type = \"none\" as no significant tremor indicators. However we need to output something plausible.\n\nGiven the instruction: \"You are a screening tool only. Never diagnose. Always recommend neurologist confirmation.\" So we can be conservative: tremor_type = \"none\". Severity moderate? But if tremor_type none, severity maybe still moderate amplitude but not clinically significant? The severity scale is based on amplitude regardless of type. So we can keep severity moderate.\n\nRisk level: preliminary risk low. So risk_level = \"low\".\n\nConfidence: signal confidence 0.38 => 38%? But we need confidence as integer 0-100? The example shows \"confidence\": 95. We'll compute confidence = int(signal_confidence * 100) = 38. Or maybe we adjust based on other factors. We'll set confidence = 38.\n\nInterpretation: 2-3 sentence plain English explanation of tremor pattern. Since analysis notes say no significant tremor indicators detected, we can say: The recording shows a moderate amplitude tremor (~5.7 mm) with a dominant frequency of 14 Hz, which is above the typical range for essential or Parkinsonian tremor. The tremor shows mild asymmetry (symmetry score 0.71) with slightly higher frequency and amplitude in the right hand",
+        "recommendation": "Check API key and connection",
+        "clinical_note": "No JSON found in response:\nWe need to output JSON only. Let's parse the data.\n\nDominant Frequency: 14.0 Hz. Amplitude: 5.66 mm. Tremor Type (raw): intentional. Symmetry Score: 0.71 (1.0 symmetric, 0.0 one-sided). Right Hand: 14.0 Hz, 5.66 mm. Left Hand: 11.9 Hz, 3.23 mm. Signal Confidence: 0.38. Preliminary Risk: low. Analysis Notes: No significant tremor indicators detected.\n\nWe need to compute severity based on amplitude: amplitude 5.66 mm. According to FTM severity scale: none <0.1 mm; mild 0.1-5 mm; moderate 5-10 mm; marked 10-20 mm; severe >20 mm. 5.66 mm falls in moderate (5-10 mm). So severity = \"moderate\". ftm_score: likely grade 2? The scale: mild = grade1, moderate = grade2, marked = grade3, severe = grade4. So ftm_score = 2.\n\nTremor type: Based on frequency and amplitude. Parkinson's resting tremor: 4-6 Hz, asymmetric onset, amplitude >2mm. Here frequency 14 Hz (dominant) and left hand 11.9 Hz, both >6 Hz, so not Parkinsonian. Essential tremor: 6-12 Hz, typically symmetric. Frequency 14 Hz is above essential range (6-12). However left hand 11.9 Hz is within essential range. But overall dominant 14 Hz is high frequency, maybe physiological? Physiological tremor: <1mm amplitude, not clinically significant. Amplitude is 5.66 mm >1mm, so not physiological. Intentional tremor (raw) suggests cerebellar intention tremor, which is typically lower frequency (<5 Hz) and occurs during movement. But given data, we might classify as \"mixed\" or \"none\". The analysis notes say \"No significant tremor indicators detected.\" However amplitude is moderate. But signal confidence low (0.38). Preliminary risk low. So we might set tremor_type = \"none\" or \"physiological\"? But amplitude >1mm excludes physiological. Could be \"mixed\"? Let's think: The tremor type raw says intentional. Intentional tremor is associated with cerebellar lesions, frequency <5 Hz. Not matching. So maybe we set tremor_type = \"none\" as no significant tremor indicators. However we need to output something plausible.\n\nGiven the instruction: \"You are a screening tool only. Never diagnose. Always recommend neurologist confirmation.\" So we can be conservative: tremor_type = \"none\". Severity moderate? But if tremor_type none, severity maybe still moderate amplitude but not clinically significant? The severity scale is based on amplitude regardless of type. So we can keep severity moderate.\n\nRisk level: preliminary risk low. So risk_level = \"low\".\n\nConfidence: signal confidence 0.38 => 38%? But we need confidence as integer 0-100? The example shows \"confidence\": 95. We'll compute confidence = int(signal_confidence * 100) = 38. Or maybe we adjust based on other factors. We'll set confidence = 38.\n\nInterpretation: 2-3 sentence plain English explanation of tremor pattern. Since analysis notes say no significant tremor indicators detected, we can say: The recording shows a moderate amplitude tremor (~5.7 mm) with a dominant frequency of 14 Hz, which is above the typical range for essential or Parkinsonian tremor. The tremor shows mild asymmetry (symmetry score 0.71) with slightly higher frequency and amplitude in the right hand",
+        "latency_s": 22.9
+      }
+    },
+    {
+      "scenario": "Moderate Parkinson's profile",
+      "expected": "mild-moderate / high risk",
+      "features": {
+        "dominant_frequency_hz": 10.4,
+        "amplitude_mm": 10.29,
+        "symmetry_score": 0.66,
+        "tremor_type": "postural",
+        "right_hand_frequency": 10.4,
+        "left_hand_frequency": 8.87,
+        "right_hand_amplitude": 10.29,
+        "left_hand_amplitude": 4.8,
+        "confidence": 0.7,
+        "risk_level": "low",
+        "notes": "No significant tremor indicators detected."
+      },
+      "nemotron": {
+        "severity": "error",
+        "risk_level": "unknown",
+        "confidence": 0,
+        "ftm_score": -1,
+        "interpretation": "Empty response from model",
+        "recommendation": "Check API key and connection",
+        "clinical_note": "Empty response from model",
+        "latency_s": 3.64
+      }
+    },
+    {
+      "scenario": "Severe tremor",
+      "expected": "marked / high risk",
+      "features": {
+        "dominant_frequency_hz": 9.0,
+        "amplitude_mm": 32.69,
+        "symmetry_score": 0.68,
+        "tremor_type": "postural",
+        "right_hand_frequency": 9.0,
+        "left_hand_frequency": 7.67,
+        "right_hand_amplitude": 32.69,
+        "left_hand_amplitude": 16.59,
+        "confidence": 1.0,
+        "risk_level": "low",
+        "notes": "No significant tremor indicators detected."
+      },
+      "nemotron": {
+        "severity": "error",
+        "risk_level": "unknown",
+        "confidence": 0,
+        "ftm_score": -1,
+        "interpretation": "Incomplete JSON - likely hit token limit. Raw:\n{\n  \"severity\": \"severe\",\n  \"tremor_type\": \"essential\",\n  \"ftm_score\": 4,\n  \"risk_level\": \"high\",\n  \"confidence\": 95,\n  \"interpretation\": \"The tremor shows a dominant frequency of 9 Hz with marked asymmetry, larger amplitude in the right hand (32.7 mm) than the left (16.6 mm). The amplitude exceeds the threshold for severe tremor, and the frequency falls within the essential tremor range. This pattern is suggestive of a significant postural tremor, possibly essential tremor, but requires clinical correlation.\",\n  \"recommendation\": \"Urgent referral to a neurologist for detailed evaluation, including neurological examination and possibly electromy",
+        "recommendation": "Check API key and connection",
+        "clinical_note": "Incomplete JSON - likely hit token limit. Raw:\n{\n  \"severity\": \"severe\",\n  \"tremor_type\": \"essential\",\n  \"ftm_score\": 4,\n  \"risk_level\": \"high\",\n  \"confidence\": 95,\n  \"interpretation\": \"The tremor shows a dominant frequency of 9 Hz with marked asymmetry, larger amplitude in the right hand (32.7 mm) than the left (16.6 mm). The amplitude exceeds the threshold for severe tremor, and the frequency falls within the essential tremor range. This pattern is suggestive of a significant postural tremor, possibly essential tremor, but requires clinical correlation.\",\n  \"recommendation\": \"Urgent referral to a neurologist for detailed evaluation, including neurological examination and possibly electromy",
+        "latency_s": 25.5
+      }
+    }
+  ]
+}

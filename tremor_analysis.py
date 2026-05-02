@@ -2,9 +2,10 @@
 SENTINEL — Tremor Analysis Module
 ===================================
 Person 2: Signal Processing & Feature Extraction
+Person 3 (Natasha): LLM Clinical Interpretation
 
 Input:  XYZ landmark time series (from Person 1 / OAK-D)
-Output: Structured feature dict for Nemotron (Person 3)
+Output: Structured feature dict + Nemotron severity classification
 
 Mock data is used until Person 1 has the camera ready.
 """
@@ -15,6 +16,8 @@ from scipy.fft import fft, fftfreq
 from dataclasses import dataclass, asdict
 from typing import Optional
 import json
+import time
+from openai import OpenAI
 
 
 # ─────────────────────────────────────────────
@@ -210,7 +213,7 @@ def assess_risk_level(
     # Frequency in Parkinson's range
     if 4.0 <= frequency <= 6.0:
         score += 2
-        notes.append(f"Frequency {frequency:.1f}Hz is within Parkinson's resting tremor range (4–6Hz).")
+        notes.append(f"Frequency {frequency:.1f}Hz is within Parkinson's resting tremor range (4-6Hz).")
 
     # Significant amplitude
     if amplitude > 3.0:
@@ -220,7 +223,7 @@ def assess_risk_level(
     # Asymmetric onset
     if symmetry < 0.6:
         score += 2
-        notes.append(f"Asymmetry detected (score {symmetry:.2f}) — consistent with early unilateral onset.")
+        notes.append(f"Asymmetry detected (score {symmetry:.2f}) - consistent with early unilateral onset.")
 
     if score >= 4:
         return "high", " ".join(notes)
@@ -236,7 +239,7 @@ def assess_risk_level(
 
 def analyze_tremor(hand_data: dict) -> TremorFeatures:
     """
-    Full pipeline: raw landmark data → structured TremorFeatures.
+    Full pipeline: raw landmark data -> structured TremorFeatures.
 
     hand_data format (from Person 1):
     {
@@ -313,18 +316,86 @@ The following features were extracted from their hand movement:
 - Analysis Notes: {features.notes}
 
 Clinical reference:
-- Parkinson's resting tremor: 4–6 Hz, asymmetric onset, amplitude > 2mm
-- Essential tremor: 6–12 Hz, typically symmetric
+- Parkinson's resting tremor: 4-6 Hz, asymmetric onset, amplitude > 2mm
+- Essential tremor: 6-12 Hz, typically symmetric
 - Physiological tremor: < 1mm amplitude, not clinically significant
 
 Based on this data, provide:
-1. A plain-English interpretation of the tremor pattern (2–3 sentences)
+1. A plain-English interpretation of the tremor pattern (2-3 sentences)
 2. A clear risk assessment (low / moderate / high)
 3. A specific recommendation for next steps
 
 IMPORTANT: You are a screening tool only. Always recommend consulting a neurologist for confirmation.
 Do not diagnose. Do not alarm unnecessarily.
 """.strip()
+
+
+# ─────────────────────────────────────────────
+# NATASHA'S PART — Nemotron API client
+#
+# Nemotron 120B via OpenRouter — no GPU needed.
+# Get your free key at openrouter.ai
+# ─────────────────────────────────────────────
+client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key="key",
+)
+MODEL = "nvidia/nemotron-3-super-120b-a12b"
+
+
+# ─────────────────────────────────────────────
+# NATASHA'S PART — Nemotron severity classifier
+#
+# Sends amplitude to Nemotron 120B and gets back
+# FTM severity classification in caps for the UI.
+# ─────────────────────────────────────────────
+def classify_with_nemotron(amplitude_mm: float) -> dict:
+    t0 = time.time()
+    try:
+        response = client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": """You are a clinical AI. Classify tremor severity by amplitude using the FTM scale.
+
+FTM Severity Scale:
+  none     = < 0.1 mm
+  mild     = 0.1-5 mm    (FTM grade 1)
+  moderate = 5-10 mm     (FTM grade 2)
+  marked   = 10-20 mm    (FTM grade 3)
+  severe   = > 20 mm     (FTM grade 4)
+
+Respond with ONLY this JSON, no thinking, no explanation:
+{"severity": "none|mild|moderate|marked|severe", "ftm_score": 0}"""
+                },
+                {
+                    "role": "user",
+                    "content": f"Amplitude: {amplitude_mm} mm. Output JSON only, start with {{"
+                },
+            ],
+            max_tokens=2000,
+            temperature=0.0,
+        )
+
+        latency = round(time.time() - t0, 2)
+        content = response.choices[0].message.content
+        if not content:
+            raise ValueError("Empty response")
+
+        raw   = content.strip()
+        start = raw.find('{')
+        end   = raw.rfind('}')
+        if start == -1 or end == -1:
+            raise ValueError(f"No JSON found: {raw}")
+
+        result = json.loads(raw[start:end+1])
+        result["latency_s"] = latency
+        return result
+
+    except Exception as e:
+        return {"severity": "error", "ftm_score": -1,
+                "latency_s": round(time.time()-t0, 2), "error": str(e)}
 
 
 # ─────────────────────────────────────────────
@@ -352,7 +423,14 @@ if __name__ == "__main__":
     print("\n── Extracted Features ──────────────────────────")
     print(json.dumps(asdict(features), indent=2))
 
-    print("\n── Nemotron Prompt ─────────────────────────────")
-    print(features_to_nemotron_prompt(features))
+    # NATASHA'S PART — send to Nemotron and print result
+    print("\n── Nemotron Severity Classification (Natasha) ──")
+    result   = classify_with_nemotron(features.amplitude_mm)
+    severity = result.get("severity", "error").upper()
+    ftm      = result.get("ftm_score", "?")
+    latency  = result.get("latency_s", "?")
 
-    print("\n✓ Hand off features dict to Person 3 (Nemotron layer)")
+    print(f"  Amplitude : {features.amplitude_mm} mm")
+    print(f"  SEVERITY  : {severity}  (FTM grade {ftm})  [{latency}s]")
+
+    print("\n✓ Done")
