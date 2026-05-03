@@ -2,15 +2,13 @@
 
 Run with:
     streamlit run dashboard.py
-
-Make sure tremor_analysis.py and report_generator.py are in the same folder.
 """
 
 from __future__ import annotations
 
-import json
-import time
+import os
 import streamlit as st
+from dotenv import load_dotenv
 from openai import OpenAI
 
 from tremor_analysis import (
@@ -20,8 +18,6 @@ from tremor_analysis import (
 )
 from report_generator import generate_report
 
-from dotenv import load_dotenv
-import os
 load_dotenv()
 
 nemotron_client = OpenAI(
@@ -31,13 +27,23 @@ nemotron_client = OpenAI(
 MODEL = "nvidia/nemotron-3-super-120b-a12b"
 
 SEVERITY_COLOR = {
-    "none":     "#22c55e",
-    "mild":     "#84cc16",
-    "moderate": "#f59e0b",
-    "marked":   "#f97316",
-    "severe":   "#ef4444",
+    "none":     "#16a34a",
+    "mild":     "#2563eb",
+    "moderate": "#d97706",
+    "marked":   "#dc2626",
+    "severe":   "#7f1d1d",
     "unknown":  "#6b7280",
     "error":    "#6b7280",
+}
+
+SEVERITY_BG = {
+    "none":     "#f0fdf4",
+    "mild":     "#eff6ff",
+    "moderate": "#fffbeb",
+    "marked":   "#fef2f2",
+    "severe":   "#fef2f2",
+    "unknown":  "#f9fafb",
+    "error":    "#f9fafb",
 }
 
 SCENARIOS = [
@@ -48,86 +54,225 @@ SCENARIOS = [
 ]
 
 
-
 def get_explanation(features, severity: str, ftm: int) -> str:
-    """Ask Nemotron to explain the result in plain English for the patient."""
     try:
         response = nemotron_client.chat.completions.create(
             model=MODEL,
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a friendly clinical AI explaining tremor results to a patient. Be warm, clear, and concise. Never diagnose. Always recommend seeing a doctor."
+                    "content": "You are a clinical AI. Write exactly 2-3 sentences explaining tremor results to a patient in plain English. Output only those sentences, nothing else."
                 },
                 {
                     "role": "user",
                     "content": (
-                        f"The patient's tremor was classified as {severity.upper()} (FTM grade {ftm}/4).\n"
-                        f"Amplitude: {features.amplitude_mm} mm, Frequency: {features.dominant_frequency_hz} Hz, "
-                        f"Symmetry: {features.symmetry_score}, Risk: {features.risk_level}.\n\n"
-                        f"Write 2-3 sentences explaining what this means in plain English. "
-                        f"What should the patient know? What should they do next? "
-                        f"Be reassuring but honest. No markdown, no bullet points, just plain text."
+                        f"Tremor severity: {severity.upper()} (FTM grade {ftm}/4). "
+                        f"Amplitude: {features.amplitude_mm} mm, "
+                        f"Frequency: {features.dominant_frequency_hz} Hz. "
+                        f"Write 2-3 plain English sentences for the patient."
                     )
                 }
             ],
-            max_tokens=300,
-            temperature=0.3,
+            max_tokens=150,
+            temperature=0.0,
         )
         content = response.choices[0].message.content
-        return content.strip() if content else "Unable to generate explanation."
+        if not content:
+            return "Analysis complete. Please consult a neurologist for interpretation."
+        sentences = content.strip().split(". ")
+        return ". ".join(sentences[:3]).strip()
     except Exception as e:
         return f"Could not generate explanation: {e}"
 
 
 def main() -> None:
-    st.set_page_config(page_title="SENTINEL — Tremor Monitor", layout="wide")
+    st.set_page_config(
+        page_title="SENTINEL — Tremor Screening",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
 
     st.markdown("""
     <style>
-    [data-testid="stAppViewContainer"] { background: #0a0f1e; }
-    [data-testid="stSidebar"] { background: #0f172a; }
-    h1, h2, h3 { color: #e2e8f0 !important; }
-    p, label { color: #94a3b8 !important; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
+    }
+
+    [data-testid="stAppViewContainer"] {
+        background-color: #f0f4f8;
+    }
+
+    [data-testid="stSidebar"] {
+        background-color: #1a3a5c;
+        border-right: none;
+    }
+
+    [data-testid="stSidebar"] * {
+        color: #e2e8f0 !important;
+    }
+
+    [data-testid="stSidebar"] .stSelectbox label,
+    [data-testid="stSidebar"] .stButton,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3 {
+        color: #ffffff !important;
+    }
+
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
+        color: #93c5fd !important;
+        font-size: 13px !important;
+    }
+
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+        max-width: 1100px;
+    }
+
+    h1, h2, h3 {
+        color: #1e3a5f !important;
+        font-weight: 600 !important;
+    }
+
+    .stMetric {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 16px 20px;
+    }
+
+    .stMetric label {
+        color: #64748b !important;
+        font-size: 12px !important;
+        font-weight: 500 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+    }
+
+    .stMetric [data-testid="stMetricValue"] {
+        color: #1e3a5f !important;
+        font-size: 24px !important;
+        font-weight: 600 !important;
+    }
+
+    div[data-testid="stButton"] button[kind="primary"] {
+        background-color: #1a3a5c;
+        border: none;
+        border-radius: 6px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        padding: 10px 20px;
+    }
+
+    div[data-testid="stButton"] button[kind="primary"]:hover {
+        background-color: #1e4a7a;
+    }
+
+    .stDownloadButton button {
+        background-color: #ffffff !important;
+        color: #1a3a5c !important;
+        border: 1.5px solid #1a3a5c !important;
+        border-radius: 6px !important;
+        font-weight: 500 !important;
+    }
+
+    .stDownloadButton button:hover {
+        background-color: #eff6ff !important;
+    }
+
+    .stInfo {
+        background-color: #eff6ff;
+        border: 1px solid #bfdbfe;
+        border-radius: 8px;
+        color: #1e40af;
+    }
+
+       hr {
+        border-color: #e2e8f0;
+    }
+
+    [data-testid="stToolbar"] { display: none; }
+    [data-testid="stDecoration"] { display: none; }
+    [data-testid="stHeader"] { display: none; }
+    footer { display: none; }
+
+    [data-testid="stMainBlockContainer"] {
+        padding-top: 0 !important;
+        max-width: 100% !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-    st.title("Tremor Monitor")
-    st.caption("Nemotron 120B severity classification · Not a medical diagnostic device")
-    st.divider()
+    # ── Top header bar ────────────────────────────────────────────
+    st.markdown("""
+    <div style='background:#1a3a5c;padding:16px 32px;margin:0 0 32px 0;border-radius:8px;
+                display:flex;align-items:center;justify-content:space-between;'>
+        <div style='display:flex;align-items:center;gap:12px;'>
+            <span style='font-size:22px;font-weight:700;color:white;
+                         letter-spacing:0.05em;'>SENTINEL</span>
+            <span style='background:#2563eb;color:white;font-size:10px;
+                         font-weight:600;padding:3px 8px;border-radius:4px;
+                         letter-spacing:0.08em;'>BETA</span>
+        </div>
+        <span style='color:#93c5fd;font-size:13px;'>
+            Tremor Screening System · Powered by Nemotron 120B
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
 
+    # ── Sidebar ───────────────────────────────────────────────────
     with st.sidebar:
-        st.subheader("Test Scenario")
+        st.markdown("""
+        <div style='padding:8px 0 20px 0;border-bottom:1px solid #2d5a8e;margin-bottom:20px;'>
+            <p style='color:#93c5fd;font-size:11px;letter-spacing:0.1em;
+                      text-transform:uppercase;margin:0;'>Patient Assessment</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("**Select Test Scenario**")
         scenario_name = st.selectbox(
-            "Select a tremor profile",
+            "Tremor profile",
             [s["name"] for s in SCENARIOS],
+            label_visibility="collapsed",
         )
         scenario = next(s for s in SCENARIOS if s["name"] == scenario_name)
 
-        st.subheader("Mock Data Parameters")
-        st.caption(f"Frequency : {scenario['frequency']} Hz")
-        st.caption(f"Amplitude : {scenario['amplitude']} mm")
-        st.caption(f"Noise     : {scenario['noise']}")
+        st.markdown("<br/>", unsafe_allow_html=True)
+        st.markdown("**Signal Parameters**")
+        st.markdown(f"Frequency: **{scenario['frequency']} Hz**")
+        st.markdown(f"Amplitude: **{scenario['amplitude']} mm**")
+        st.markdown(f"Noise level: **{scenario['noise']}**")
 
-        run = st.button("▶ Run Analysis", type="primary", use_container_width=True)
+        st.markdown("<br/>", unsafe_allow_html=True)
+        run = st.button("Run Analysis", type="primary", use_container_width=True)
 
-    # store results in session
+        st.markdown("<br/><br/>", unsafe_allow_html=True)
+        st.markdown("""
+        <p style='color:#4a7aaa;font-size:10px;text-align:center;line-height:1.5;'>
+            ⚠ For screening purposes only.<br/>
+            Not a substitute for medical diagnosis.
+        </p>
+        """, unsafe_allow_html=True)
+
+    # session state
     for key in ["last_features", "last_severity", "last_ftm", "last_explanation"]:
         if key not in st.session_state:
             st.session_state[key] = None
 
     if run:
-        with st.spinner("Running analysis and calling Nemotron 120B..."):
+        with st.spinner("Analyzing tremor data..."):
             hand_data = generate_mock_hand_data(
                 duration_seconds=30, sample_rate=30,
                 tremor_frequency=scenario["frequency"],
                 tremor_amplitude=scenario["amplitude"],
                 noise_level=scenario["noise"],
             )
-            features = analyze_tremor(hand_data)
-            result   = classify_with_nemotron(features.amplitude_mm)
-            severity = result.get("severity", "unknown")
-            ftm      = result.get("ftm_score", "?")
+            features    = analyze_tremor(hand_data)
+            result      = classify_with_nemotron(features.amplitude_mm)
+            severity    = result.get("severity", "unknown")
+            ftm         = result.get("ftm_score", "?")
             explanation = get_explanation(features, severity, ftm)
 
         st.session_state.last_features    = features
@@ -141,71 +286,100 @@ def main() -> None:
         ftm         = st.session_state.last_ftm
         explanation = st.session_state.last_explanation
         color       = SEVERITY_COLOR.get(severity, "#6b7280")
+        bg          = SEVERITY_BG.get(severity, "#f9fafb")
 
-        # severity badge
+        # ── Assessment result card ────────────────────────────────
         st.markdown(
-            f"""<div style='background:#0f172a;border:2px solid {color};border-radius:16px;
-                            padding:40px;text-align:center;margin-bottom:24px;'>
-                <p style='color:#94a3b8;font-size:13px;letter-spacing:3px;
-                          text-transform:uppercase;margin:0 0 12px 0;'>
-                    Nemotron 120B Assessment
-                </p>
-                <p style='color:{color};font-size:72px;font-weight:900;
-                          letter-spacing:6px;margin:0;line-height:1;'>
-                    {severity.upper()}
-                </p>
-                <p style='color:#64748b;font-size:16px;margin:14px 0 0 0;'>
-                    FTM Grade {ftm} / 4
-                </p>
+            f"""<div style='background:white;border:1px solid #e2e8f0;
+                            border-left:5px solid {color};border-radius:8px;
+                            padding:28px 32px;margin-bottom:24px;
+                            display:flex;align-items:center;
+                            justify-content:space-between;'>
+                <div>
+                    <p style='color:#64748b;font-size:11px;font-weight:600;
+                              letter-spacing:0.1em;text-transform:uppercase;
+                              margin:0 0 6px 0;'>Assessment Result</p>
+                    <p style='color:{color};font-size:36px;font-weight:700;
+                              margin:0;letter-spacing:0.02em;'>{severity.upper()}</p>
+                    <p style='color:#94a3b8;font-size:13px;margin:4px 0 0 0;'>
+                        Fahn-Tolosa-Marin Grade {ftm} / 4
+                    </p>
+                </div>
+                <div style='background:{bg};border:1px solid {color}22;
+                            border-radius:8px;padding:16px 24px;text-align:center;'>
+                    <p style='color:#64748b;font-size:11px;font-weight:500;
+                              text-transform:uppercase;letter-spacing:0.08em;
+                              margin:0 0 4px 0;'>AI Confidence</p>
+                    <p style='color:{color};font-size:28px;font-weight:700;margin:0;'>
+                        {result.get("confidence", "—")}%
+                    </p>
+                </div>
             </div>""",
             unsafe_allow_html=True,
         )
 
-        # metrics row
-        st.subheader("Signal Features")
+        # ── Metrics ───────────────────────────────────────────────
+        st.markdown("#### Signal Measurements")
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Amplitude",  f"{features.amplitude_mm} mm")
         col2.metric("Frequency",  f"{features.dominant_frequency_hz} Hz")
-        col3.metric("Symmetry",   f"{features.symmetry_score}")
-        col4.metric("Risk",       features.risk_level.upper())
+        col3.metric("Symmetry",   f"{features.symmetry_score} / 1.0")
+        col4.metric("Risk Level", features.risk_level.capitalize())
 
-        # Nemotron explanation
-        st.subheader("What This Means")
+        st.markdown("<br/>", unsafe_allow_html=True)
+
+        # ── Explanation ───────────────────────────────────────────
+        st.markdown("#### Clinical Interpretation")
         st.markdown(
-            f"""<div style='background:#0f172a;border:1px solid #1e293b;border-radius:12px;
-                            padding:20px 24px;'>
-                <p style='color:#cbd5e1;font-size:15px;line-height:1.7;margin:0;'>
+            f"""<div style='background:white;border:1px solid #e2e8f0;
+                            border-radius:8px;padding:20px 24px;'>
+                <p style='color:#374151;font-size:14px;line-height:1.75;margin:0;'>
                     {explanation}
                 </p>
             </div>""",
             unsafe_allow_html=True,
         )
 
-        st.divider()
+        st.markdown("<br/>", unsafe_allow_html=True)
 
-        # report section
-        st.subheader("Clinical Report")
-        st.caption("Generate a PDF report you can bring to your doctor.")
+        # ── Report section ────────────────────────────────────────
+        st.markdown("#### Clinical Report")
+        st.markdown(
+            """<div style='background:white;border:1px solid #e2e8f0;
+                           border-radius:8px;padding:20px 24px;margin-bottom:16px;'>
+                <p style='color:#374151;font-size:13px;margin:0;'>
+                    Generate a structured PDF report containing your full assessment,
+                    measurements, clinical findings, and recommendations.
+                    This report can be shared with your physician.
+                </p>
+            </div>""",
+            unsafe_allow_html=True,
+        )
 
-        if st.button("Generate Report", type="primary"):
-            with st.spinner("Nemotron is writing your clinical report..."):
-                pdf_bytes = generate_report(features, severity, ftm)
-
-            st.success("Report ready!")
-            st.download_button(
-                label="⬇ Download PDF Report",
-                data=pdf_bytes,
-                file_name=f"sentinel_tremor_report_{severity}.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-            )
+        col_btn, col_empty = st.columns([1, 3])
+        with col_btn:
+            if st.button("Generate PDF Report", type="primary", use_container_width=True):
+                with st.spinner("Generating clinical report..."):
+                    pdf_bytes = generate_report(features, severity, ftm)
+                st.download_button(
+                    label="⬇  Download Report",
+                    data=pdf_bytes,
+                    file_name=f"sentinel_report_{severity}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
 
     else:
+        # ── Empty state ───────────────────────────────────────────
         st.markdown(
-            """<div style='background:#0f172a;border:1px solid #1e293b;border-radius:16px;
-                           padding:60px;text-align:center;'>
-                <p style='color:#334155;font-size:18px;margin:0;'>
-                    Select a scenario and press Run Analysis
+            """<div style='background:white;border:1px solid #e2e8f0;border-radius:8px;
+                           padding:80px 40px;text-align:center;margin-top:40px;'>
+                <p style='font-size:32px;margin:0 0 12px 0;'>🩺</p>
+                <p style='color:#1e3a5f;font-size:18px;font-weight:600;margin:0 0 8px 0;'>
+                    Ready for Assessment
+                </p>
+                <p style='color:#94a3b8;font-size:14px;margin:0;'>
+                    Select a scenario from the sidebar and click Run Analysis to begin.
                 </p>
             </div>""",
             unsafe_allow_html=True,
