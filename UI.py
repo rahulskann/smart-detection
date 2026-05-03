@@ -75,9 +75,12 @@ def get_explanation(features, severity: str, ftm: int) -> str:
                     "role": "user",
                     "content": (
                         f"Tremor severity: {severity.upper()} (FTM grade {ftm}/4). "
-                        f"Amplitude: {features.amplitude_mm} mm, "
+                        f"Amplitude: {features.amplitude_mm} mm. "
                         f"Frequency: {features.dominant_frequency_hz} Hz. "
                         f"Write 2-3 plain English sentences for the patient."
+                        f"Be honest about severity — {severity} tremor affects daily activities."
+                    )
+                }
                     )
                 }
             ],
@@ -403,7 +406,7 @@ def main() -> None:
 
         with st.spinner("Analyzing tremor data..."):
             features    = analyze_tremor(hand_data)
-            result      = classify_with_nemotron(features.amplitude_mm)
+            result      = classify_with_nemotron(features.amplitude_mm, features.dominant_frequency_hz, features.symmetry_score)
             severity    = result.get("severity", "unknown")
             ftm         = result.get("ftm_score", "?")
             explanation = get_explanation(features, severity, ftm)
