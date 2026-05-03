@@ -11,13 +11,16 @@ Mock data is used until Person 1 has the camera ready.
 """
 
 import numpy as np
-from scipy import signal
-from scipy.fft import fft, fftfreq
+from numpy.fft import fft, fftfreq
 from dataclasses import dataclass, asdict
-from typing import Optional
+from typing import Any
 import json
 import time
-from openai import OpenAI
+
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
 
 
 # ─────────────────────────────────────────────
@@ -96,7 +99,10 @@ def generate_mock_hand_data(
         "right": right_hand,
         "left": left_hand,
         "timestamps": t,
-        "sample_rate": sample_rate
+        "right_timestamps": t,
+        "left_timestamps": t,
+        "sample_rate": sample_rate,
+        "metadata": {"source": "mock", "units": "mm"},
     }
 
 
@@ -109,12 +115,14 @@ def extract_fingertip_movement(hand_landmarks: np.ndarray) -> np.ndarray:
     Focuses on index fingertip (landmark 8) as primary tremor signal.
     Returns (N, 3) array — XYZ displacement from mean position.
     """
+    if hand_landmarks.size == 0:
+        return np.empty((0, 3), dtype=np.float64)
     fingertip = hand_landmarks[:, 8, :]           # index fingertip
     displacement = fingertip - fingertip.mean(axis=0)
     return displacement
 
 
-def compute_dominant_frequency(signal_xyz: np.ndarray, sample_rate: int) -> tuple[float, float]:
+def compute_dominant_frequency(signal_xyz: np.ndarray, sample_rate: float) -> tuple[float, float]:
     """
     Runs FFT on combined XYZ signal.
     Returns (dominant_frequency_hz, confidence).
@@ -124,9 +132,13 @@ def compute_dominant_frequency(signal_xyz: np.ndarray, sample_rate: int) -> tupl
     Physiological:      8–12 Hz (everyone has this at very low amplitude)
     """
     N = len(signal_xyz)
+    if N < 4 or sample_rate <= 0:
+        return 0.0, 0.0
 
     # Combine XYZ into single magnitude signal
     magnitude = np.linalg.norm(signal_xyz, axis=1)
+    if not np.all(np.isfinite(magnitude)) or np.allclose(magnitude, magnitude[0]):
+        return 0.0, 0.0
 
     # Apply Hanning window to reduce spectral leakage
     windowed = magnitude * np.hanning(N)
@@ -136,11 +148,11 @@ def compute_dominant_frequency(signal_xyz: np.ndarray, sample_rate: int) -> tupl
     spectrum = np.abs(fft(windowed))
 
     # Only look at positive frequencies, cap at 20 Hz (above that = noise)
-    positive_mask = (freqs > 0.5) & (freqs < 20.0)
+    positive_mask = (freqs > 0.5) & (freqs < min(20.0, sample_rate / 2.0))
     freqs_pos = freqs[positive_mask]
     spectrum_pos = spectrum[positive_mask]
 
-    if len(spectrum_pos) == 0:
+    if len(spectrum_pos) == 0 or spectrum_pos.sum() <= 0:
         return 0.0, 0.0
 
     dominant_idx = np.argmax(spectrum_pos)
@@ -158,7 +170,11 @@ def compute_amplitude_mm(signal_xyz: np.ndarray) -> float:
     OAK-D depth gives us real millimeter values.
     With mock data, units are simulated mm.
     """
+    if signal_xyz.size == 0:
+        return 0.0
     magnitude = np.linalg.norm(signal_xyz, axis=1)
+    if not np.all(np.isfinite(magnitude)):
+        return 0.0
     peak_to_peak = magnitude.max() - magnitude.min()
     return float(peak_to_peak)
 
@@ -233,6 +249,59 @@ def assess_risk_level(
         return "low", "No significant tremor indicators detected."
 
 
+def _as_landmark_array(value: Any) -> np.ndarray:
+    if value is None:
+        return np.empty((0, 21, 3), dtype=np.float64)
+    landmarks = np.asarray(value, dtype=np.float64)
+    if landmarks.size == 0:
+        return np.empty((0, 21, 3), dtype=np.float64)
+    if landmarks.ndim != 3 or landmarks.shape[1:] != (21, 3):
+        raise ValueError(
+            f"Expected hand landmarks with shape (N, 21, 3), got {landmarks.shape}."
+        )
+    return landmarks
+
+
+def _timestamps_for_hand(hand_data: dict, hand: str, count: int, fallback_rate: float) -> np.ndarray:
+    hand_key = f"{hand}_timestamps"
+    if hand_key in hand_data:
+        timestamps = np.asarray(hand_data[hand_key], dtype=np.float64)
+    elif "timestamps" in hand_data:
+        timestamps = np.asarray(hand_data["timestamps"], dtype=np.float64)
+    else:
+        timestamps = np.arange(count, dtype=np.float64) / max(float(fallback_rate), 1e-6)
+
+    if timestamps.size < count:
+        generated = np.arange(count, dtype=np.float64) / max(float(fallback_rate), 1e-6)
+        generated[:timestamps.size] = timestamps
+        timestamps = generated
+    return timestamps[:count]
+
+
+def _estimate_sample_rate(timestamps: np.ndarray, fallback_rate: float) -> float:
+    if timestamps.size < 2:
+        return float(fallback_rate)
+    diffs = np.diff(timestamps)
+    valid = diffs[diffs > 1e-6]
+    if valid.size == 0:
+        return float(fallback_rate)
+    return float(1.0 / np.median(valid))
+
+
+def _analyze_hand_signal(
+    hand_landmarks: np.ndarray,
+    timestamps: np.ndarray,
+    fallback_sample_rate: float,
+) -> tuple[float, float, float]:
+    if hand_landmarks.size == 0:
+        return 0.0, 0.0, 0.0
+    signal_xyz = extract_fingertip_movement(hand_landmarks)
+    sample_rate = _estimate_sample_rate(timestamps, fallback_sample_rate)
+    frequency, confidence = compute_dominant_frequency(signal_xyz, sample_rate)
+    amplitude = compute_amplitude_mm(signal_xyz)
+    return frequency, confidence, amplitude
+
+
 # ─────────────────────────────────────────────
 # MAIN ANALYSIS FUNCTION
 # ─────────────────────────────────────────────
@@ -249,22 +318,42 @@ def analyze_tremor(hand_data: dict) -> TremorFeatures:
         "sample_rate": int
     }
     """
-    sample_rate = hand_data["sample_rate"]
+    sample_rate = float(hand_data.get("sample_rate", 30))
+    right_hand = _as_landmark_array(hand_data.get("right"))
+    left_hand = _as_landmark_array(hand_data.get("left"))
+    right_timestamps = _timestamps_for_hand(hand_data, "right", len(right_hand), sample_rate)
+    left_timestamps = _timestamps_for_hand(hand_data, "left", len(left_hand), sample_rate)
 
-    # Extract fingertip displacement for each hand
-    right_signal = extract_fingertip_movement(hand_data["right"])
-    left_signal  = extract_fingertip_movement(hand_data["left"])
+    right_freq, right_conf, right_amp = _analyze_hand_signal(
+        right_hand,
+        right_timestamps,
+        sample_rate,
+    )
+    left_freq, left_conf, left_amp = _analyze_hand_signal(
+        left_hand,
+        left_timestamps,
+        sample_rate,
+    )
 
-    # Frequency analysis
-    right_freq, right_conf = compute_dominant_frequency(right_signal, sample_rate)
-    left_freq,  left_conf  = compute_dominant_frequency(left_signal,  sample_rate)
-
-    # Amplitude
-    right_amp = compute_amplitude_mm(right_signal)
-    left_amp  = compute_amplitude_mm(left_signal)
+    has_right = len(right_hand) > 0
+    has_left = len(left_hand) > 0
+    if not has_right and not has_left:
+        return TremorFeatures(
+            dominant_frequency_hz=0.0,
+            amplitude_mm=0.0,
+            symmetry_score=0.0,
+            tremor_type="none",
+            right_hand_frequency=0.0,
+            left_hand_frequency=0.0,
+            right_hand_amplitude=0.0,
+            left_hand_amplitude=0.0,
+            confidence=0.0,
+            risk_level="low",
+            notes="No hand landmarks were captured.",
+        )
 
     # Use the more prominent hand as the primary signal
-    if right_amp >= left_amp:
+    if has_right and (right_amp >= left_amp or not has_left):
         dominant_freq = right_freq
         dominant_amp  = right_amp
         confidence    = right_conf
@@ -274,9 +363,18 @@ def analyze_tremor(hand_data: dict) -> TremorFeatures:
         confidence    = left_conf
 
     # Higher-level features
-    symmetry     = compute_symmetry_score(right_freq, left_freq, right_amp, left_amp)
+    symmetry     = compute_symmetry_score(right_freq, left_freq, right_amp, left_amp) if has_right and has_left else 0.0
     tremor_type  = classify_tremor_type(dominant_freq, dominant_amp)
     risk, notes  = assess_risk_level(dominant_freq, dominant_amp, symmetry, tremor_type)
+    metadata = hand_data.get("metadata", {})
+    if not has_right or not has_left:
+        captured = "right" if has_right else "left"
+        notes = f"{notes} Only the {captured} hand was captured; symmetry could not be assessed."
+    if isinstance(metadata, dict) and metadata.get("units") not in (None, "mm", "mock"):
+        notes = (
+            f"{notes} Camera capture did not include calibrated depth; "
+            "amplitudes are image-space estimates."
+        )
 
     return TremorFeatures(
         dominant_frequency_hz   = round(dominant_freq, 2),
@@ -330,13 +428,23 @@ Do not diagnose. Do not alarm unnecessarily.
 """.strip()
 
 
-from dotenv import load_dotenv
 import os
+
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    def load_dotenv(*args, **kwargs):
+        return False
+
 load_dotenv()
 
-client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=os.getenv("OPENROUTER_API_KEY"),
+client = (
+    OpenAI(
+        base_url="https://integrate.api.nvidia.com/v1",
+        api_key=os.getenv("OPENROUTER_API_KEY"),
+    )
+    if OpenAI is not None
+    else None
 )
 MODEL = "nvidia/nemotron-3-super-120b-a12b"
 
@@ -350,6 +458,8 @@ MODEL = "nvidia/nemotron-3-super-120b-a12b"
 def classify_with_nemotron(amplitude_mm: float) -> dict:
     t0 = time.time()
     try:
+        if client is None:
+            raise RuntimeError("OpenAI SDK is not installed.")
         response = client.chat.completions.create(
             model=MODEL,
             messages=[
