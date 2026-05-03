@@ -338,7 +338,7 @@ Do not diagnose. Do not alarm unnecessarily.
 # ─────────────────────────────────────────────
 client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
-    api_key="key",
+    api_key="",
 )
 MODEL = "nvidia/nemotron-3-super-120b-a12b"
 
