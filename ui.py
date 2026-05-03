@@ -3,20 +3,22 @@
 Run with:
     streamlit run dashboard.py
 
-Make sure tremor_analysis.py is in the same folder.
+Make sure tremor_analysis.py and report_generator.py are in the same folder.
 """
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
+import json
+import time
 import streamlit as st
+from openai import OpenAI
 
 from tremor_analysis import (
     generate_mock_hand_data,
     analyze_tremor,
     classify_with_nemotron,
 )
+from report_generator import generate_report
 
 SEVERITY_COLOR = {
     "none":     "#22c55e",
@@ -35,9 +37,47 @@ SCENARIOS = [
     {"name": "Severe tremor",         "frequency":  4.5, "amplitude": 15.0, "noise": 1.0},
 ]
 
+# Nemotron client for explanation
+nemotron_client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key="",
+)
+MODEL = "nvidia/nemotron-3-super-120b-a12b"
+
+
+def get_explanation(features, severity: str, ftm: int) -> str:
+    """Ask Nemotron to explain the result in plain English for the patient."""
+    try:
+        response = nemotron_client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a friendly clinical AI explaining tremor results to a patient. Be warm, clear, and concise. Never diagnose. Always recommend seeing a doctor."
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"The patient's tremor was classified as {severity.upper()} (FTM grade {ftm}/4).\n"
+                        f"Amplitude: {features.amplitude_mm} mm, Frequency: {features.dominant_frequency_hz} Hz, "
+                        f"Symmetry: {features.symmetry_score}, Risk: {features.risk_level}.\n\n"
+                        f"Write 2-3 sentences explaining what this means in plain English. "
+                        f"What should the patient know? What should they do next? "
+                        f"Be reassuring but honest. No markdown, no bullet points, just plain text."
+                    )
+                }
+            ],
+            max_tokens=300,
+            temperature=0.3,
+        )
+        content = response.choices[0].message.content
+        return content.strip() if content else "Unable to generate explanation."
+    except Exception as e:
+        return f"Could not generate explanation: {e}"
+
 
 def main() -> None:
-    st.set_page_config(page_title="Tremor Monitor", layout="wide")
+    st.set_page_config(page_title="SENTINEL — Tremor Monitor", layout="wide")
 
     st.markdown("""
     <style>
@@ -49,10 +89,9 @@ def main() -> None:
     """, unsafe_allow_html=True)
 
     st.title("Tremor Monitor")
-    st.caption("Nemotron 120B severity classification | Not a medical diagnostic device")
+    st.caption("Nemotron 120B severity classification · Not a medical diagnostic device")
     st.divider()
 
-    # sidebar — pick scenario
     with st.sidebar:
         st.subheader("Test Scenario")
         scenario_name = st.selectbox(
@@ -66,27 +105,40 @@ def main() -> None:
         st.caption(f"Amplitude : {scenario['amplitude']} mm")
         st.caption(f"Noise     : {scenario['noise']}")
 
-        run = st.button("Run Analysis", type="primary", use_container_width=True)
+        run = st.button("▶ Run Analysis", type="primary", use_container_width=True)
+
+    # store results in session
+    for key in ["last_features", "last_severity", "last_ftm", "last_explanation"]:
+        if key not in st.session_state:
+            st.session_state[key] = None
 
     if run:
-        with st.spinner("Generating mock data and calling Nemotron 120B..."):
-            # Person 2 — generate and analyze
+        with st.spinner("Running analysis and calling Nemotron 120B..."):
             hand_data = generate_mock_hand_data(
-                duration_seconds=30,
-                sample_rate=30,
+                duration_seconds=30, sample_rate=30,
                 tremor_frequency=scenario["frequency"],
                 tremor_amplitude=scenario["amplitude"],
                 noise_level=scenario["noise"],
             )
             features = analyze_tremor(hand_data)
-
-            # Natasha — Nemotron classification
             result   = classify_with_nemotron(features.amplitude_mm)
             severity = result.get("severity", "unknown")
             ftm      = result.get("ftm_score", "?")
-            color    = SEVERITY_COLOR.get(severity, "#6b7280")
+            explanation = get_explanation(features, severity, ftm)
 
-        # big severity badge
+        st.session_state.last_features    = features
+        st.session_state.last_severity    = severity
+        st.session_state.last_ftm         = ftm
+        st.session_state.last_explanation = explanation
+
+    if st.session_state.last_features:
+        features    = st.session_state.last_features
+        severity    = st.session_state.last_severity
+        ftm         = st.session_state.last_ftm
+        explanation = st.session_state.last_explanation
+        color       = SEVERITY_COLOR.get(severity, "#6b7280")
+
+        # severity badge
         st.markdown(
             f"""<div style='background:#0f172a;border:2px solid {color};border-radius:16px;
                             padding:40px;text-align:center;margin-bottom:24px;'>
@@ -105,7 +157,7 @@ def main() -> None:
             unsafe_allow_html=True,
         )
 
-        # feature breakdown
+        # metrics row
         st.subheader("Signal Features")
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Amplitude",  f"{features.amplitude_mm} mm")
@@ -113,8 +165,36 @@ def main() -> None:
         col3.metric("Symmetry",   f"{features.symmetry_score}")
         col4.metric("Risk",       features.risk_level.upper())
 
-        st.subheader("Analysis Notes")
-        st.info(features.notes if features.notes else "No significant tremor indicators detected.")
+        # Nemotron explanation
+        st.subheader("What This Means")
+        st.markdown(
+            f"""<div style='background:#0f172a;border:1px solid #1e293b;border-radius:12px;
+                            padding:20px 24px;'>
+                <p style='color:#cbd5e1;font-size:15px;line-height:1.7;margin:0;'>
+                    {explanation}
+                </p>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+
+        st.divider()
+
+        # report section
+        st.subheader("Clinical Report")
+        st.caption("Generate a PDF report you can bring to your doctor.")
+
+        if st.button("Generate Report", type="primary"):
+            with st.spinner("Nemotron is writing your clinical report..."):
+                pdf_bytes = generate_report(features, severity, ftm)
+
+            st.success("Report ready!")
+            st.download_button(
+                label="⬇ Download PDF Report",
+                data=pdf_bytes,
+                file_name=f"sentinel_tremor_report_{severity}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
 
     else:
         st.markdown(
